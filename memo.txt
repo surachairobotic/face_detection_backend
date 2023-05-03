@@ -1,0 +1,3 @@
+psql -U facedb -d database -W
+
+sudo systemctl restart postgresql
