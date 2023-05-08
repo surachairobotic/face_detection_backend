@@ -1,3 +1,6 @@
 psql -U facedb -d database -W
 
 sudo systemctl restart postgresql
+
+
+python3 -m uvicorn backend:app --reload --host 0.0.0.0

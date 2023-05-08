@@ -1,8 +1,11 @@
 from fastapi import FastAPI, HTTPException, File, UploadFile
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy import create_engine, Column, Integer, String
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
+from typing import List
+import base64
 
 from jwt_utils import create_access_token, create_refresh_token, decode_token
 
@@ -10,9 +13,12 @@ import io
 from PIL import Image
 import base64
 
-import cv2
-import numpy as np
 from PIL import Image
+
+from face import *
+
+import cv2
+from moviepy.editor import VideoFileClip
 
 app = FastAPI()
 
@@ -38,6 +44,22 @@ class User(Base):
     def to_dict(self):
         return {"id": self.id, "user_name": self.user_name, "email": self.email, "api_quota_limit": self.api_quota_limit}
 
+class FaceDetectionResult(Base):
+    __tablename__ = 'face_detection_results'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer)
+    image_b64 = Column(String)
+    created_at = Column(DateTime)
+
+def base64_safe(image_data):
+    #print(image_data)
+    return image_data.replace('+', '-*-').replace('/', '_|_')
+
+def base64_safe_decode(image_data):
+    #print(image_data)
+    return image_data.replace('-*-', '+').replace('_|_', '/')
+
 # Create the database tables (if they don't already exist)
 Base.metadata.create_all(bind=engine)
 
@@ -51,6 +73,22 @@ class UserRegistration(BaseModel):
 class UserLogin(BaseModel):
     email: str
     password: str
+
+class Image64(BaseModel):
+    image_b64: str
+class Image64Token(BaseModel):
+    image_b64: str
+    access_token: str
+
+class QueryDateTime(BaseModel):
+    access_token: str
+    dt_from: str
+    dt_to: str
+
+# class FaceDetectionResult(BaseModel):
+#     user_id: int
+#     image_b64: str
+#     created_at: datetime
 
 @app.get('/')
 def root():
@@ -108,15 +146,18 @@ def login_user(user: UserLogin):
         # Close the session
         session.close()
 
-class Image64(BaseModel):
-    image_b64: str
-class Image64Token(BaseModel):
-    image_b64: str
-    access_token: str
+def store_face_results(db: sessionmaker, user_id: int, face_result: str):
+    #print(face_result)
+    #print(type(face_result))
+    b64_safe = base64_safe(face_result)
+    result = FaceDetectionResult(user_id=user_id, image_b64=b64_safe, created_at=datetime.now())
+    db.add(result)
+    db.commit()
+    db.refresh(result)
+    return result
 
 @app.post('/process_image', response_model=Image64)
 def process_image(image: Image64Token):
-    #print('image : ', image)
     # Open a new database session
     session = Session()
     
@@ -124,9 +165,9 @@ def process_image(image: Image64Token):
         # Check that the user is authenticated and has enough API quota remaining
         user_id = decode_token(image.access_token)
         if user_id == -1:
-            return HTTPException(status_code=401, detail="DecodeError")
+            raise HTTPException(status_code=401, detail="DecodeError")
         elif user_id == -2:
-            return HTTPException(status_code=402, detail="ExpiredSignatureError")
+            raise HTTPException(status_code=402, detail="ExpiredSignatureError")
 
         # Decode the base64 image data into binary data
         image_data = base64.b64decode(image.image_b64)
@@ -148,6 +189,17 @@ def process_image(image: Image64Token):
         # Create a new ImageProcessingResult object containing the processed image in base64 format
         result = Image64(image_b64=processed_image_b64)
         
+        # print('START')
+        # print(processed_image_b64)
+        # x = base64_safe(processed_image_b64)
+        # print('START22222222')
+        # print(x)
+        # y = base64_safe_decode(x)
+        # print('START33333333')
+        # print(y)
+
+        store_face_results(session, user_id, processed_image_b64)
+
         # Return the result in the response
         return result
     
@@ -155,22 +207,80 @@ def process_image(image: Image64Token):
         # Close the session
         session.close()
 
-def detect_faces(image):
-    # Convert PIL image to NumPy array
-    np_image = np.array(image)
-    
-    # Convert image to grayscale
-    gray = cv2.cvtColor(np_image, cv2.COLOR_BGR2GRAY)
-    
-    # Load pre-trained Haar Cascade classifier for face detection
-    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
-    
-    # Detect faces in the grayscale image
-    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5)
-    
-    # Draw rectangles around the detected faces
-    for (x, y, w, h) in faces:
-        cv2.rectangle(np_image, (x, y), (x+w, y+h), (0, 255, 0), 2)
-    
-    # Convert the modified NumPy array back to a PIL image and return it
-    return Image.fromarray(np_image)
+@app.post("/query_images", response_model=List[str])
+def query_images(msg: QueryDateTime):
+    print(msg)
+    # Open a new database session
+    session = Session()
+
+    print('A')
+    # verify access token and get user id
+    user_id = decode_token(msg.access_token)
+    print('A1')
+    if user_id == -1:
+        print('A-1')
+        raise HTTPException(status_code=401, detail="DecodeError")
+    elif user_id == -2:
+        print('A-2')
+        raise HTTPException(status_code=402, detail="ExpiredSignatureError")
+
+    print('B')
+    # convert ISO 8601 strings to datetime objects
+    try:
+        dt_from = datetime.fromisoformat(msg.dt_from)
+        dt_to = datetime.fromisoformat(msg.dt_to)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid datetime format")
+
+    print('C')
+    print('user_id=', user_id)
+    # query database for image_b64s
+    # results = session.query(FaceDetectionResult).filter(FaceDetectionResult.user_id == user_id,
+    #                                               FaceDetectionResult.created_at >= dt_from, 
+    #                                               FaceDetectionResult.created_at <= dt_to).all()
+    results = session.query(FaceDetectionResult).all()
+    # results = session.query(FaceDetectionResult).order_by(FaceDetectionResult.created_at.desc()).first()
+
+    # image_b64 = base64_safe_decode(results.image_b64)
+    # print(image_b64)
+    image_b64s = [base64_safe_decode(result.image_b64) for result in results]
+    #print(image_b64s)
+
+    return image_b64s
+
+@app.post("/process_video")
+async def process_video(video: UploadFile = File(...)):
+    # Save the uploaded video file to disk
+    file_path = "uploaded_video.mp4"
+    with open(file_path, "wb") as f:
+        f.write(await video.read())
+
+    # Perform face detection and annotate the video
+    processed_path = detect_faces(file_path)
+
+    # Return the processed video file
+    return StreamingResponse(open(processed_path, "rb"), media_type="video/mp4")
+
+def detect_faces(file_path):
+    # Load the video using MoviePy
+    clip = VideoFileClip(file_path)
+
+    # Initialize the face detection classifier
+    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+
+    # Define a function to apply face detection on each frame of the video
+    def detect(frame):
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+        for (x, y, w, h) in faces:
+            cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+        return frame
+
+    # Apply the face detection function to each frame of the video
+    processed_clip = clip.fl_image(detect)
+
+    # Save the processed video to disk
+    processed_path = "processed_video.mp4"
+    processed_clip.write_videofile(processed_path, codec="libx264", audio_codec="aac")
+
+    return processed_path

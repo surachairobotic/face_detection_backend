@@ -4,14 +4,14 @@ import base64
 def add2quotation(msg):
     return ('\"'+msg+'\"')
 
-access_token='eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjozLCJleHAiOjE2ODMyOTQ5MDF9.cn393s7nsYNQDnMXxiv-4otcB5iajY7Z84oBO0uKJ1Y'
-refresh_token='eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjozLCJleHAiOjE2ODMzNzk1MDF9.8g3MwEbD0lDgzAfeC2gy35t6mLon9KirHzw4wqetdzY'
+access_token='eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjozLCJleHAiOjE2ODM1NjMwODR9.H2fUW6e8lR2x4Jj9JAJteRJ9-b0x-s50Sw-SEQBgnZA'
+refresh_token='eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjozLCJleHAiOjE2ODM2MzYyOTJ9.w2Z9ojLXZ6tNm4eRzPhG2l2pf0Y4VvP8Br_iWwZz7VQ'
 
 # Define the endpoint URL
 endpoint_url = 'http://localhost:8000/process_image'
 
 # Open the image file and read the data into memory
-with open('/home/thinkpad/Pictures/face.jpg', 'rb') as f:
+with open('/home/thinkpad/Pictures/face2.jpg', 'rb') as f:
     image_data = f.read()
 
 # Encode the image data as a base64 string
