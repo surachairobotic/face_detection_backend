@@ -136,7 +136,7 @@ def login_user(user: UserLogin):
             decode_token(refresh_token)
             
             # Return the tokens in the response
-            return HTTPException(status_code=200, detail={'access_token': access_token, 'refresh_token': refresh_token})
+            return HTTPException(status_code=200, detail={'access_token': access_token, 'refresh_token': refresh_token, 'api_quota_limit': db_user.api_quota_limit})
         
         else:
             # Return an error response if the email or password is invalid
@@ -158,6 +158,7 @@ def store_face_results(db: sessionmaker, user_id: int, face_result: str):
 
 @app.post('/process_image', response_model=Image64)
 def process_image(image: Image64Token):
+    print('//process_image')
     # Open a new database session
     session = Session()
     
@@ -213,18 +214,13 @@ def query_images(msg: QueryDateTime):
     # Open a new database session
     session = Session()
 
-    print('A')
     # verify access token and get user id
     user_id = decode_token(msg.access_token)
-    print('A1')
     if user_id == -1:
-        print('A-1')
         raise HTTPException(status_code=401, detail="DecodeError")
     elif user_id == -2:
-        print('A-2')
         raise HTTPException(status_code=402, detail="ExpiredSignatureError")
 
-    print('B')
     # convert ISO 8601 strings to datetime objects
     try:
         dt_from = datetime.fromisoformat(msg.dt_from)
@@ -232,13 +228,12 @@ def query_images(msg: QueryDateTime):
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid datetime format")
 
-    print('C')
     print('user_id=', user_id)
     # query database for image_b64s
     # results = session.query(FaceDetectionResult).filter(FaceDetectionResult.user_id == user_id,
     #                                               FaceDetectionResult.created_at >= dt_from, 
     #                                               FaceDetectionResult.created_at <= dt_to).all()
-    results = session.query(FaceDetectionResult).all()
+    results = session.query(FaceDetectionResult).filter(FaceDetectionResult.user_id == user_id)
     # results = session.query(FaceDetectionResult).order_by(FaceDetectionResult.created_at.desc()).first()
 
     # image_b64 = base64_safe_decode(results.image_b64)
@@ -256,12 +251,12 @@ async def process_video(video: UploadFile = File(...)):
         f.write(await video.read())
 
     # Perform face detection and annotate the video
-    processed_path = detect_faces(file_path)
+    processed_path = detect_faces2(file_path)
 
     # Return the processed video file
     return StreamingResponse(open(processed_path, "rb"), media_type="video/mp4")
 
-def detect_faces(file_path):
+def detect_faces2(file_path):
     # Load the video using MoviePy
     clip = VideoFileClip(file_path)
 

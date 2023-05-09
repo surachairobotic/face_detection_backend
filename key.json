@@ -1,0 +1,5 @@
+{
+    "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjozLCJleHAiOjE2ODM1OTE2NDZ9._M63hTTp_qhOf4LR8kR_Pt4HjnE4in_NJCZuSYMNiOc",
+    "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjozLCJleHAiOjE2ODM2NzYyNDZ9.A9XiRMR66Y-a-0M6PtTjfz4W0WkyaY341q-WMQULEJI",
+    "api_quota_limit": 200
+}

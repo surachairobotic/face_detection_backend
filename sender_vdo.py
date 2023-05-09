@@ -13,7 +13,7 @@ with open(video_path, "rb") as file:
 # Check the response status code
 if response.status_code == 200:
     # Save the processed video file
-    with open("processed_video.mp4", "wb") as file:
+    with open("/home/thinkpad/temp/processed_video.mp4", "wb") as file:
         file.write(response.content)
 else:
     print("Request failed with status code:", response.status_code)
